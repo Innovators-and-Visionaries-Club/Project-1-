@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -119,11 +121,47 @@ class AppProvider extends ChangeNotifier {
     _initProgress = 0.0;
     notifyListeners();
 
-    // Simulate downloading the offline AI engine weights (approx 25MB + configurations)
-    for (int i = 1; i <= 20; i++) {
-      await Future.delayed(const Duration(milliseconds: 100));
-      _initProgress = i / 20.0;
-      notifyListeners();
+    try {
+      final cacheDir = await getTemporaryDirectory();
+      
+      // Load offline Knowledge Base
+      final kbFile = File('${cacheDir.path}/mobile_knowledge_base.json');
+      if (await kbFile.exists()) {
+        final content = await kbFile.readAsString();
+        final List<dynamic> jsonChunks = jsonDecode(content);
+        
+        // Count existing chunks to avoid duplicate insertion
+        final existingChunks = await DatabaseService.instance.getChunks();
+        if (existingChunks.isEmpty) {
+          for (int i = 0; i < jsonChunks.length; i++) {
+            final chunkData = jsonChunks[i];
+            final chunk = ChunkModel(
+              id: _uuid.v4(),
+              documentId: chunkData['document_id'] ?? 'offline_doc',
+              documentName: chunkData['document_name'] ?? 'Offline Knowledge Base',
+              text: chunkData['text'] ?? '',
+              pageNumber: chunkData['page_number'] ?? 1,
+            );
+            await DatabaseService.instance.insertChunk(chunk);
+            
+            if (i % 10 == 0) {
+              _initProgress = (i / jsonChunks.length) * 0.8; 
+              notifyListeners();
+            }
+          }
+        }
+      }
+
+      // Check Model presence
+      final modelFile = File('${cacheDir.path}/llama3.2_1b_mobile.task');
+      if (await modelFile.exists()) {
+         _initProgress = 1.0;
+      } else {
+         debugPrint("Warning: llama3.2_1b_mobile.task missing in cache.");
+      }
+      
+    } catch (e) {
+      debugPrint("Engine Init Error: $e");
     }
 
     _isInitialized = true;
@@ -592,6 +630,30 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> clearChatHistory() async {
+    // Save the conversation to cache memory before wiping
+    if (_messages.isNotEmpty) {
+      try {
+        final cacheDir = await getTemporaryDirectory();
+        final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+        final backupDir = Directory('${cacheDir.path}/saved_chats');
+        if (!await backupDir.exists()) {
+          await backupDir.create(recursive: true);
+        }
+        final backupFile = File('${backupDir.path}/chat_$timestamp.json');
+        
+        final messagesList = _messages.map((m) => {
+          'sender': m.sender,
+          'text': m.text,
+          'timestamp': m.timestamp.toIso8601String()
+        }).toList();
+        
+        await backupFile.writeAsString(jsonEncode(messagesList));
+        debugPrint('Conversation saved to cache: ${backupFile.path}');
+      } catch (e) {
+        debugPrint('Failed to save conversation: $e');
+      }
+    }
+
     final db = await DatabaseService.instance.database;
     await db.delete('messages');
     _messages.clear();
