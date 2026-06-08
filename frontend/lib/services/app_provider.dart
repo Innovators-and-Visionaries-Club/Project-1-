@@ -142,7 +142,7 @@ class AppProvider extends ChangeNotifier {
               text: chunkData['text'] ?? '',
               pageNumber: chunkData['page_number'] ?? 1,
             );
-            await DatabaseService.instance.insertChunk(chunk);
+            await DatabaseService.instance.insertChunks([chunk]);
             
             if (i % 10 == 0) {
               _initProgress = (i / jsonChunks.length) * 0.8; 
