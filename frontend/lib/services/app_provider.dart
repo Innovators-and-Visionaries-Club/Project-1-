@@ -137,10 +137,14 @@ class AppProvider extends ChangeNotifier {
             final chunkData = jsonChunks[i];
             final chunk = ChunkModel(
               id: _uuid.v4(),
-              documentId: chunkData['document_id'] ?? 'offline_doc',
-              documentName: chunkData['document_name'] ?? 'Offline Knowledge Base',
+              documentId: chunkData['id']?.toString() ?? 'offline_doc',
+              documentName: (chunkData['metadata'] != null && chunkData['metadata']['source'] != null) 
+                  ? chunkData['metadata']['source'].toString() 
+                  : 'Offline Knowledge Base',
               text: chunkData['text'] ?? '',
-              pageNumber: chunkData['page_number'] ?? 1,
+              pageNumber: (chunkData['metadata'] != null && chunkData['metadata']['page'] != null) 
+                  ? int.tryParse(chunkData['metadata']['page'].toString()) ?? 1 
+                  : 1,
             );
             await DatabaseService.instance.insertChunks([chunk]);
             
