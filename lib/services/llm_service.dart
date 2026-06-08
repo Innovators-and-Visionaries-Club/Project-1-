@@ -26,10 +26,51 @@ class LlmService {
         yield accumulated;
       }
     } else {
-      // In a real device setup, this binds to LLM running via llama.cpp or MediaPipe.
-      // Falls back to mock for safety in the current configuration.
-      yield* generateAnswerStream(query, contextChunks, isMock: true);
+      // 1. Build prompt from contextChunks
+      final promptBuffer = StringBuffer();
+      promptBuffer.writeln("You are a helpful study assistant for Smriti, an offline AI notebook.");
+      promptBuffer.writeln("Answer using ONLY the context below. Be concise and clear.");
+      promptBuffer.writeln("If answer not in context, say: I couldn't find that in your documents.");
+      promptBuffer.writeln("Cite source and page at end of every answer.\\n");
+      promptBuffer.writeln("Context:");
+      for (var chunk in contextChunks) {
+        promptBuffer.writeln("[${chunk.text} — Source: ${chunk.documentName}, Page ${chunk.pageNumber}]");
+      }
+      promptBuffer.writeln("\\nQuestion: $query");
+      promptBuffer.writeln("Answer:");
+
+      // 2. Implement a SMART mock that uses the real chunks
+      String answerText;
+      if (contextChunks.isEmpty) {
+        answerText = "I couldn't find that in your documents.";
+      } else {
+        final buffer = StringBuffer();
+        buffer.write("📚 [From your documents]\\n\\n");
+        for (var chunk in contextChunks) {
+          final sentences = chunk.text.split(RegExp(r'(?<=[.!?])\\s+')).where((s) => s.isNotEmpty).toList();
+          final summaryLine = sentences.isNotEmpty ? sentences.first : chunk.text;
+          buffer.write("- $summaryLine (Source: ${chunk.documentName}, Page ${chunk.pageNumber})\\n");
+        }
+        answerText = buffer.toString().trim();
+      }
+
+      // Stream it word-by-word
+      final words = answerText.split(' ');
+      String accumulated = '';
+      for (int i = 0; i < words.length; i++) {
+        final delayMs = 30 + (i % 3 == 0 ? 50 : 10);
+        await Future.delayed(Duration(milliseconds: delayMs));
+        accumulated += (i == 0 ? '' : ' ') + words[i];
+        yield accumulated;
+      }
     }
+  }
+
+  Stream<String> _realLlmGenerate(String prompt) async* {
+    // TODO: Replace with MediaPipe LLM Inference API
+    // Model: Gemma 2B Q4, path: getApplicationDocumentsDirectory()/models/gemma2b_q4.bin
+    // Use: LlmInference.createFromOptions() from package:flutter_mediapipe
+    yield "LLM not yet loaded";
   }
 
   // Parses matching text chunks to construct a highly relevant answer utilizing references

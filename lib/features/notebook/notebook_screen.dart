@@ -5,6 +5,7 @@ import '../../services/app_provider.dart';
 import '../../models/document_model.dart';
 import '../../widgets/wavy_background.dart';
 import '../../core/theme.dart';
+import 'document_preview_screen.dart';
 
 class NotebookScreen extends StatefulWidget {
   const NotebookScreen({super.key});
@@ -16,6 +17,36 @@ class NotebookScreen extends StatefulWidget {
 class _NotebookScreenState extends State<NotebookScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
+  late AppProvider _provider;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _provider = Provider.of<AppProvider>(context, listen: false);
+    _provider.removeListener(_onIngestionComplete); // avoid double-register
+    _provider.addListener(_onIngestionComplete);
+  }
+
+  void _onIngestionComplete() {
+    final name = _provider.lastIngestedFileName;
+    if (name != null) {
+      _provider.consumeIngestedFileName();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✓ $name ingested — ready to query'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _provider.removeListener(_onIngestionComplete);
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickAndIngestFile(BuildContext context, AppProvider provider) async {
     try {
@@ -183,6 +214,30 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 letterSpacing: 1,
               ),
             ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade400,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'offline · private',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.white.withOpacity(0.6),
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text(
               'model loaded: gemma 2b q4',
@@ -228,9 +283,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
                   });
                 },
                 style: const TextStyle(color: Colors.black, fontSize: 13),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Ask your memory anything...',
-                  hintStyle: TextStyle(color: AppTheme.textLight),
+                  hintStyle: TextStyle(color: Colors.grey.shade500),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -317,11 +372,24 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Widget _buildDocumentCard(AppProvider provider, DocumentModel doc) {
     final isSelected = provider.selectedDocumentId == doc.id;
     final isPdf = doc.name.toLowerCase().endsWith('.pdf');
+    final isIngesting = doc.status == 'Ingesting' || doc.status == 'processing';
+    final isFailed = doc.status == 'Failed' || doc.status == 'failed';
+    final progressValue = provider.ingestionProgressValue;
+    final isErrorState = progressValue == -1.0;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         onTap: doc.status == 'Ready'
+            ? () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => DocumentPreviewScreen(document: doc),
+                  ),
+                );
+              }
+            : null,
+        onLongPress: doc.status == 'Ready'
             ? () {
                 if (isSelected) {
                   provider.setSelectedDocumentId(null);
@@ -341,71 +409,104 @@ class _NotebookScreenState extends State<NotebookScreen> {
               width: isSelected ? 1.8 : 1,
             ),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.black : const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  isPdf ? Icons.picture_as_pdf_outlined : Icons.description_outlined,
-                  color: isSelected ? Colors.white : Colors.black,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 15),
-
-              // File Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      doc.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: doc.status == 'Failed' ? Colors.redAccent : Colors.black,
-                      ),
+              Row(
+                children: [
+                  // Icon
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.black : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(height: 4),
-                    Row(
+                    child: Icon(
+                      isPdf ? Icons.picture_as_pdf_outlined : Icons.description_outlined,
+                      color: isSelected ? Colors.white : Colors.black,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+
+                  // File Details
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _formatFileSize(doc.size),
-                          style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
-                        ),
-                        const SizedBox(width: 6),
-                        const Text('•', style: TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
-                        const SizedBox(width: 6),
-                        Text(
-                          doc.status == 'Ready'
-                              ? '${doc.pageCount} pages'
-                              : doc.status.toLowerCase(),
+                          doc.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 10, 
-                            color: doc.status == 'Failed' ? Colors.redAccent : AppTheme.textSecondary,
-                            fontWeight: doc.status != 'Ready' ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: isFailed ? Colors.redAccent : Colors.black,
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(
+                              _formatFileSize(doc.size),
+                              style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text('•', style: TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
+                            const SizedBox(width: 6),
+                            Text(
+                              doc.status == 'Ready'
+                                  ? '${doc.pageCount} pages'
+                                  : doc.status.toLowerCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isFailed ? Colors.redAccent : AppTheme.textSecondary,
+                                fontWeight: doc.status != 'Ready' ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 18),
+                    onPressed: () {
+                      provider.deleteDocument(doc.id);
+                    },
+                  ),
+                ],
               ),
 
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 18),
-                onPressed: () {
-                  provider.deleteDocument(doc.id);
-                },
-              ),
+              // Inline progress bar — only shown while ingesting this doc
+              if (isIngesting && provider.isIngesting) ...[
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: isErrorState
+                        ? 1.0
+                        : (progressValue == 0.0 ? null : progressValue),
+                    minHeight: 3,
+                    backgroundColor: const Color(0xFFF3F4F6),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      isErrorState ? Colors.redAccent : Colors.black,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  isErrorState
+                      ? 'Failed — tap to retry'
+                      : provider.ingestionProgressText,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isErrorState ? Colors.redAccent : AppTheme.textSecondary,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

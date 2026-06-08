@@ -26,7 +26,9 @@ class SmritiApp extends StatelessWidget {
         return MaterialApp(
           title: 'Smriti - Offline AI Notebook',
           debugShowCheckedModeBanner: false,
-          theme: provider.isDarkMode ? AppTheme.darkTheme : AppTheme.lightTheme,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: provider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
           home: child,
         );
       },

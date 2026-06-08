@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -11,8 +12,8 @@ import '../models/flashcard_model.dart';
 import '../models/quiz_model.dart';
 import '../models/timeline_model.dart';
 import 'database_service.dart';
-import 'extraction_service.dart';
-import 'vector_db_service.dart';
+import 'vector_service.dart';
+import 'ingestion_service.dart';
 import 'llm_service.dart';
 
 class AppProvider extends ChangeNotifier {
@@ -25,12 +26,18 @@ class AppProvider extends ChangeNotifier {
   bool _isMockMode = true;
   String? _selectedDocumentId; // To filter searches to specific files
   bool _isIngesting = false;
+  String _ingestionProgress = '';
+  String _ingestionProgressText = '';
+  double _ingestionProgressValue = 0.0;
+  String? _lastIngestedFileName;
   String _modelDownloadStatus = "Ready"; // 'Download Needed', 'Downloading', 'Ready'
   double _modelDownloadProgress = 1.0;
   bool _isInitialized = false;
   double _initProgress = 0.0;
   bool _isInitializing = false;
   bool _isOnboardingCompleted = false;
+  List<String> _queryHistory = [];
+  String? _filterDocumentId;
 
   bool get isInitialized => _isInitialized;
   double get initProgress => _initProgress;
@@ -46,8 +53,16 @@ class AppProvider extends ChangeNotifier {
   bool get isMockMode => _isMockMode;
   String? get selectedDocumentId => _selectedDocumentId;
   bool get isIngesting => _isIngesting;
+  String get ingestionProgress => _ingestionProgress;
+  String get ingestionProgressText => _ingestionProgressText;
+  double get ingestionProgressValue => _ingestionProgressValue;
+  String? get lastIngestedFileName => _lastIngestedFileName;
+  void consumeIngestedFileName() { _lastIngestedFileName = null; }
   String get modelDownloadStatus => _modelDownloadStatus;
   double get modelDownloadProgress => _modelDownloadProgress;
+  List<String> get queryHistory => _queryHistory;
+  String? get filterDocumentId => _filterDocumentId;
+  void setFilterDocument(String? id) { _filterDocumentId = id; notifyListeners(); }
 
   final _uuid = const Uuid();
 
@@ -67,6 +82,12 @@ class AppProvider extends ChangeNotifier {
     _isInitialized = prefs.getBool('isInitialized') ?? false;
     _isOnboardingCompleted = prefs.getBool('isOnboardingCompleted') ?? false;
     _isDarkMode = prefs.getBool('isDarkMode') ?? false;
+
+    // Load query history
+    final historyJson = prefs.getString('query_history');
+    if (historyJson != null) {
+      _queryHistory = List<String>.from(jsonDecode(historyJson));
+    }
 
     // Load study features
     await _loadFlashcards();
@@ -164,35 +185,35 @@ class AppProvider extends ChangeNotifier {
       // 1. Save initial record
       await DatabaseService.instance.insertDocument(newDoc);
 
-      // 2. Extract text & chunk
-      final extractionResult = await ExtractionService.instance.extractAndChunk(filePath, fileName);
-      final int pages = extractionResult['pageCount'];
-      final List<ChunkModel> rawChunks = extractionResult['chunks'];
+      // 2. Stream real ingestion pipeline progress
+      await for (final progress in IngressionService.instance.ingestFile(newDoc, filePath)) {
+        _ingestionProgress = progress;
+        _ingestionProgressText = progress;
+        // Map stream messages to a 0–1 progress value
+        if (progress.toLowerCase().contains('extracting')) {
+          _ingestionProgressValue = 0.25;
+        } else if (progress.toLowerCase().contains('creating')) {
+          _ingestionProgressValue = 0.55;
+        } else if (progress.toLowerCase().contains('saving')) {
+          _ingestionProgressValue = 0.80;
+        } else if (progress.toLowerCase().contains('done')) {
+          _ingestionProgressValue = 1.0;
+        }
+        notifyListeners();
+      }
 
-      // Update UI state to Indexing
-      _updateDocStateInList(docId, 'Indexing', pageCount: pages, tokenCount: rawChunks.length * 500);
-      await DatabaseService.instance.updateDocumentStatus(
-        docId, 
-        'Indexing',
-        pageCount: pages,
-        tokenCount: rawChunks.length * 500,
-      );
+      _lastIngestedFileName = fileName;
+      await _loadDocuments(); // refresh from DB to get updated status and page counts
 
-      // 3. Vector Embed & Index chunks
-      final List<ChunkModel> chunksWithDocId = rawChunks.map((chunk) => ChunkModel(
-        id: chunk.id,
-        documentId: docId,
-        documentName: chunk.documentName,
-        pageNumber: chunk.pageNumber,
-        text: chunk.text,
-      )).toList();
-
-      await VectorDbService.instance.indexChunks(chunksWithDocId, isMock: _isMockMode);
-
-      // 4. Mark Ready
-      _updateDocStateInList(docId, 'Ready');
-      await DatabaseService.instance.updateDocumentStatus(docId, 'Ready');
+      // Brief pause at 100% then reset bar
+      await Future.delayed(const Duration(seconds: 1));
+      _ingestionProgressValue = 0.0;
+      _ingestionProgressText = '';
+      notifyListeners();
     } catch (e) {
+      _ingestionProgressText = 'Failed — tap to retry';
+      _ingestionProgressValue = -1.0; // sentinel for error state
+      notifyListeners();
       _updateDocStateInList(docId, 'Failed');
       await DatabaseService.instance.updateDocumentStatus(docId, 'Failed');
     } finally {
@@ -231,6 +252,14 @@ class AppProvider extends ChangeNotifier {
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 
+    // Save to query history
+    _queryHistory.insert(0, text.trim());
+    if (_queryHistory.length > 10) _queryHistory = _queryHistory.sublist(0, 10);
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString('query_history', jsonEncode(_queryHistory));
+    });
+    notifyListeners();
+
     // 1. Add User Message
     final userMsg = MessageModel(
       id: _uuid.v4(),
@@ -244,12 +273,10 @@ class AppProvider extends ChangeNotifier {
     await DatabaseService.instance.insertMessage(userMsg);
 
     // 2. Perform Retrieval (RAG)
-    // Query vector DB to find top 3 relevant chunks
-    final List<ChunkModel> retrievedChunks = await VectorDbService.instance.search(
+    final List<ChunkModel> retrievedChunks = await VectorService.instance.findRelevantChunks(
       text,
-      documentId: _selectedDocumentId,
+      documentId: _filterDocumentId ?? _selectedDocumentId,
       topK: 3,
-      isMock: _isMockMode,
     );
 
     // Convert retrieved chunks to UI Citations
@@ -274,10 +301,12 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     // 4. Generate Answer Stream from Local LLM
+    // Keep isMock: true as fallback if chunks list is empty
+    final bool useMock = retrievedChunks.isEmpty ? true : false;
     final answerStream = LlmService.instance.generateAnswerStream(
       text,
       retrievedChunks,
-      isMock: _isMockMode,
+      isMock: useMock,
     );
 
     StreamSubscription<String>? subscription;

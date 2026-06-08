@@ -34,7 +34,17 @@ class _ChatScreenState extends State<ChatScreen> {
   void _submitMessage(AppProvider provider) {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    
+
+    if (provider.documents.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add a document to your library first'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     _controller.clear();
     provider.sendMessage(text);
     _scrollToBottom();
@@ -68,6 +78,9 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          if (provider.documents.isNotEmpty)
+            _buildDocumentFilterRow(provider),
+
           if (provider.selectedDocumentId != null) ...[
             _buildScopeBadge(provider),
             _buildQuickActionChips(provider),
@@ -90,8 +103,78 @@ class _ChatScreenState extends State<ChatScreen> {
           if (provider.messages.isEmpty && provider.documents.isNotEmpty)
             _buildSuggestionsList(provider),
 
+          if (provider.queryHistory.isNotEmpty)
+            _buildQueryHistoryRow(provider),
+
           _buildInputBar(provider),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentFilterRow(AppProvider provider) {
+    final docs = provider.documents.where((d) => d.status == 'Ready').toList();
+    if (docs.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppTheme.border)),
+      ),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: docs.length + 1, // +1 for "All Documents"
+        itemBuilder: (ctx, idx) {
+          if (idx == 0) {
+            final isSelected = provider.filterDocumentId == null;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(
+                  'all documents',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : Colors.black,
+                  ),
+                ),
+                selected: isSelected,
+                selectedColor: Colors.black,
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: Colors.black, width: 1.2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
+                onSelected: (_) => provider.setFilterDocument(null),
+              ),
+            );
+          }
+
+          final doc = docs[idx - 1];
+          final isSelected = provider.filterDocumentId == doc.id;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(
+                doc.name.length > 20 ? '${doc.name.substring(0, 20)}...' : doc.name,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? Colors.white : Colors.black,
+                ),
+              ),
+              selected: isSelected,
+              selectedColor: Colors.black,
+              backgroundColor: Colors.white,
+              side: const BorderSide(color: Colors.black, width: 1.2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
+              avatar: isSelected
+                  ? null
+                  : const Icon(Icons.description_outlined, size: 12, color: Colors.black),
+              onSelected: (_) => provider.setFilterDocument(isSelected ? null : doc.id),
+            ),
+          );
+        },
       ),
     );
   }
@@ -362,20 +445,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.black, width: 1),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.bookmark_outline_rounded, size: 10, color: Colors.black),
-                  const SizedBox(width: 4),
-                  Text(
-                    '[$idx] ${citation.documentName} (p. ${citation.pageNumber})',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+              child: Text(
+                '📄 ${citation.documentName}, page ${citation.pageNumber}',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           );
@@ -461,9 +537,65 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildQueryHistoryRow(AppProvider provider) {
+    return Container(
+      padding: const EdgeInsets.only(left: 20, right: 20, top: 6, bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'recent',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textSecondary,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 30,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: provider.queryHistory.length,
+              itemBuilder: (ctx, idx) {
+                final query = provider.queryHistory[idx];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: GestureDetector(
+                    onTap: () {
+                      _controller.text = query;
+                      _controller.selection = TextSelection.fromPosition(
+                        TextPosition(offset: query.length),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        query.length > 30 ? '${query.substring(0, 30)}...' : query,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInputBar(AppProvider provider) {
-    final canSend = provider.documents.isNotEmpty && 
-        !(provider.messages.isNotEmpty && provider.messages.last.isStreaming);
+    final canSend = !(provider.messages.isNotEmpty && provider.messages.last.isStreaming);
 
     return Container(
       padding: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 20),
@@ -476,7 +608,6 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(
             child: TextField(
               controller: _controller,
-              enabled: canSend,
               style: const TextStyle(fontSize: 14),
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _submitMessage(provider),
