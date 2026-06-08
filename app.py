@@ -4,6 +4,8 @@ from langchain_ollama import OllamaEmbeddings, OllamaLLM
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
+import difflib
+from spellchecker import SpellChecker
 # Direct module routing to completely bypass library version conflicts
 import langchain_classic.chains.retrieval as retrieval_module
 import langchain_classic.chains.combine_documents.stuff as stuff_module
@@ -50,6 +52,7 @@ def build_local_rag_system():
     system_instruction = (
         "You are an academic assistant. Answer the student's question clearly using the provided context blocks.\n"
         "Keep your answers brief and concise to ensure maximum speed.\n"
+        "If the user makes spelling mistakes in domain-specific terminology, silently infer their meaning.\n"
         "If the context or chat history does not contain the answer, politely state that the information is missing.\n"
         "Do not make up facts.\n\n"
         "Context:\n{context}"
@@ -77,6 +80,12 @@ with str.spinner("Booting up local models and connecting to vector database...")
 if ai_chain:
     str.success("System Status: OFFLINE PIPELINE READY TO CHAT! ✅")
 
+    # Add a Clear Chat button to the sidebar to give the user a fresh start
+    with str.sidebar:
+        if str.button("🗑️ Clear Chat History", use_container_width=True):
+            str.session_state.chat_history = []
+            str.rerun()
+
     # Keep track of previous chat messages so they don't disappear when you click things
     if "chat_history" not in str.session_state:
         str.session_state.chat_history = []
@@ -87,10 +96,22 @@ if ai_chain:
             str.markdown(message["text_content"])
 
     # Wait for the user to type a question into the text bar at the bottom
-    if user_question := str.chat_input("Ask me anything about your elective notes..."):
+    if raw_question := str.chat_input("Ask me anything about your elective notes..."):
+        # Instantly correct spelling mistakes in the user's question before processing
+        spell = SpellChecker()
+        corrected_words = []
+        for word in raw_question.split():
+            # Don't try to correct pure acronyms or words with numbers
+            if word.isalpha() and word == word.lower():
+                correction = spell.correction(word)
+                corrected_words.append(correction if correction else word)
+            else:
+                corrected_words.append(word)
+        user_question = " ".join(corrected_words)
+
         # 1. Render user question instantly
         with str.chat_message("user"):
-            str.markdown(user_question)
+            str.markdown(raw_question) # Show their original typed question
             
         # Convert the Streamlit chat history format into LangChain message objects
         langchain_history = []
@@ -104,7 +125,25 @@ if ai_chain:
 
         # Only fetch history if the user explicitly asks for context OR the AI just asked a question
         context_keywords = ["with respect to previous response", "wrt previous response", "as you said earlier"]
-        if asked_for_confirmation or any(keyword in user_question.lower() for keyword in context_keywords):
+        
+        # Fuzzy match to handle typos in keywords (e.g., "wrt previuos response")
+        user_wants_history = False
+        for keyword in context_keywords:
+            if keyword in raw_question.lower() or keyword in user_question.lower():
+                user_wants_history = True
+                break
+            
+            # Slide a window across the string to check for fuzzy matches
+            words = raw_question.lower().split()
+            key_words = keyword.split()
+            if len(words) >= len(key_words):
+                for i in range(len(words) - len(key_words) + 1):
+                    chunk = " ".join(words[i:i+len(key_words)])
+                    if difflib.SequenceMatcher(None, keyword, chunk).ratio() > 0.85:
+                        user_wants_history = True
+                        break
+                        
+        if asked_for_confirmation or user_wants_history:
             for msg in str.session_state.chat_history:
                 if msg["user_type"] == "user":
                     langchain_history.append(HumanMessage(content=msg["text_content"]))
