@@ -94,11 +94,15 @@ if ai_chain:
             
         # Convert the Streamlit chat history format into LangChain message objects
         langchain_history = []
-        for msg in str.session_state.chat_history:
-            if msg["user_type"] == "user":
-                langchain_history.append(HumanMessage(content=msg["text_content"]))
-            else:
-                langchain_history.append(AIMessage(content=msg["text_content"]))
+        
+        # Only fetch history if the user explicitly asks for context
+        context_keywords = ["with respect to previous response", "wrt previous response", "as you said earlier"]
+        if any(keyword in user_question.lower() for keyword in context_keywords):
+            for msg in str.session_state.chat_history:
+                if msg["user_type"] == "user":
+                    langchain_history.append(HumanMessage(content=msg["text_content"]))
+                else:
+                    langchain_history.append(AIMessage(content=msg["text_content"]))
                 
         str.session_state.chat_history.append({"user_type": "user", "text_content": user_question})
 
