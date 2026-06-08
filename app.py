@@ -95,9 +95,16 @@ if ai_chain:
         # Convert the Streamlit chat history format into LangChain message objects
         langchain_history = []
         
-        # Only fetch history if the user explicitly asks for context
+        # Check if the assistant asked a question in its last response
+        asked_for_confirmation = False
+        if str.session_state.chat_history:
+            last_msg = str.session_state.chat_history[-1]
+            if last_msg["user_type"] == "assistant" and last_msg["text_content"].strip().endswith("?"):
+                asked_for_confirmation = True
+
+        # Only fetch history if the user explicitly asks for context OR the AI just asked a question
         context_keywords = ["with respect to previous response", "wrt previous response", "as you said earlier"]
-        if any(keyword in user_question.lower() for keyword in context_keywords):
+        if asked_for_confirmation or any(keyword in user_question.lower() for keyword in context_keywords):
             for msg in str.session_state.chat_history:
                 if msg["user_type"] == "user":
                     langchain_history.append(HumanMessage(content=msg["text_content"]))
