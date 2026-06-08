@@ -1,3 +1,4 @@
+
 # Miscellaneous
 *.class
 *.log
@@ -43,3 +44,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Backend / Python related
+smriti_env/
+chroma_data/
+chroma_db_storage/
+smriti_models/
+__pycache__/
+*.sqlite3
