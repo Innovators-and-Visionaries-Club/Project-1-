@@ -83,6 +83,17 @@ if ai_chain:
     # Add a Clear Chat button to the sidebar to give the user a fresh start
     with str.sidebar:
         if str.button("🗑️ Clear Chat History", use_container_width=True):
+            # Save the current history to storage before clearing, if it's not empty
+            if str.session_state.chat_history:
+                import json
+                from datetime import datetime
+                # Create a directory to store chats if it doesn't exist
+                os.makedirs("saved_chats", exist_ok=True)
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                filepath = os.path.join("saved_chats", f"chat_{timestamp}.json")
+                with open(filepath, "w", encoding="utf-8") as f:
+                    json.dump(str.session_state.chat_history, f, indent=4)
+                
             str.session_state.chat_history = []
             str.rerun()
 
