@@ -40,7 +40,7 @@ def build_local_rag_system():
         base_url="http://localhost:11434",
         temperature=0.7 ,
         num_ctx=1024, # Smaller context window = extremely fast processing
-        num_predict=150 # Stop generating after 150 tokens to keep it fast
+        num_predict=400 # Increased token limit to prevent cutting off mid-sentence
     )
     
     # Fetch just the single most relevant document to minimize reading time
