@@ -198,7 +198,7 @@ Ingested on June 6, 2026.
 This document contains personal notes, textbooks, or reference materials stored locally on the device.
 Smriti has parsed this content and split it into semantic segments. Each segment is indexed in a local vector database.
 When you ask a question in the chat interface, Smriti search services query these index chunks to find relevant context.
-This information is then passed directly to the local Gemma or Llama model.
+This information is then passed directly to the local Llama model.
 This workflow guarantees that all your data remains private and never leaves your device.
 ''';
   }

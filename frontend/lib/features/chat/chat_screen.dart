@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/app_provider.dart';
+import '../../services/llm_service.dart';
 import '../../models/message_model.dart';
 import '../../models/citation_model.dart';
 import '../../models/document_model.dart';
@@ -18,6 +19,15 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    // Flush the Llama 3.2 engine from RAM when the user exits the chat screen
+    LlmService.instance.disposeEngine();
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
