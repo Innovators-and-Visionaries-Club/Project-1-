@@ -1,11 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/wavy_background.dart';
 import '../../widgets/smriti_logo_painter.dart';
 import '../../core/theme.dart';
 import 'permissions_screen.dart';
 
-class WelcomeScreen extends StatelessWidget {
+class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
+
+  @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showStorageWarningIfNeeded();
+    });
+  }
+
+  Future<void> _showStorageWarningIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasSeenWarning = prefs.getBool('hasSeenStorageWarning') ?? false;
+
+    if (!hasSeenWarning) {
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.storage_rounded, color: Colors.black),
+              SizedBox(width: 10),
+              Text('Storage Requirement'),
+            ],
+          ),
+          content: const Text(
+            'Smriti is a 100% offline AI notebook.\n\nTo ensure complete privacy and speed, the app requires a minimum of 2GB of free permanent storage to securely house the offline LLM brain and your PDF chat backups.\n\nPlease ensure you have enough space before continuing.',
+            style: TextStyle(height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('I Understand'),
+            ),
+          ],
+        ),
+      );
+      await prefs.setBool('hasSeenStorageWarning', true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
