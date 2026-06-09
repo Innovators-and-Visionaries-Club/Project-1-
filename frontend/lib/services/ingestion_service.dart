@@ -139,29 +139,76 @@ class IngressionService {
   }
 
   List<ChunkModel> _chunkText(String text, DocumentModel doc, int pageNumber) {
-    const int targetChunkSize = 400;
-    const int overlap = 80;
+    const int chunkSize = 1000;
+    const int chunkOverlap = 200;
+    
+    // 1. Semantic split: Start with paragraphs
+    final paragraphs = text.split(RegExp(r'\n\n+'));
+    List<String> allSentences = [];
+    
+    // 2. Further split huge paragraphs by sentence boundaries
+    for (var p in paragraphs) {
+      if (p.length > chunkSize) {
+        final sentences = p.replaceAll(RegExp(r'(?<=\.)\s+'), '\n').split('\n');
+        for (var s in sentences) {
+          if (s.length > chunkSize) {
+             // Hard slice if a single semantic block is absurdly long
+             for (int i = 0; i < s.length; i += chunkSize) {
+               allSentences.add(s.substring(i, (i + chunkSize) > s.length ? s.length : (i + chunkSize)));
+             }
+          } else {
+             allSentences.add(s);
+          }
+        }
+      } else {
+        allSentences.add(p);
+      }
+    }
+
     List<ChunkModel> chunks = [];
-    int start = 0;
+    String currentChunk = "";
 
-    if (text.isEmpty) return chunks;
+    // 3. Assemble chunks up to target size with calculated overlap
+    for (var sentence in allSentences) {
+      if (sentence.trim().isEmpty) continue;
+      
+      if (currentChunk.length + sentence.length > chunkSize && currentChunk.isNotEmpty) {
+        chunks.add(ChunkModel(
+          id: _uuid.v4(),
+          documentId: doc.id,
+          documentName: doc.name,
+          pageNumber: pageNumber,
+          text: currentChunk.trim(),
+          embedding: null,
+        ));
+        
+        // Overlap logic: preserve exactly ~200 characters from the end of the previous chunk
+        int overlapStart = currentChunk.length - chunkOverlap;
+        if (overlapStart < 0) overlapStart = 0;
+        
+        // Find a natural word boundary for the overlap start
+        int spaceIdx = currentChunk.indexOf(' ', overlapStart);
+        if (spaceIdx == -1 || spaceIdx > currentChunk.length - 50) {
+           spaceIdx = overlapStart; 
+        }
+        
+        currentChunk = currentChunk.substring(spaceIdx).trim() + " " + sentence.trim();
+      } else {
+        currentChunk += (currentChunk.isEmpty ? "" : " ") + sentence.trim();
+      }
+    }
 
-    while (start < text.length) {
-      int end = start + targetChunkSize;
-      if (end > text.length) end = text.length;
-
-      String chunkText = text.substring(start, end);
+    if (currentChunk.trim().isNotEmpty) {
       chunks.add(ChunkModel(
         id: _uuid.v4(),
         documentId: doc.id,
         documentName: doc.name,
         pageNumber: pageNumber,
-        text: chunkText,
-        embedding: null, // Empty for now, real embedding comes later
+        text: currentChunk.trim(),
+        embedding: null,
       ));
-      
-      start += (targetChunkSize - overlap);
     }
+
     return chunks;
   }
 }
