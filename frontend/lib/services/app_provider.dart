@@ -123,38 +123,6 @@ class AppProvider extends ChangeNotifier {
 
     try {
       final cacheDir = await getTemporaryDirectory();
-      
-      // Load offline Knowledge Base
-      final kbFile = File('${cacheDir.path}/mobile_knowledge_base.json');
-      if (await kbFile.exists()) {
-        final content = await kbFile.readAsString();
-        final List<dynamic> jsonChunks = jsonDecode(content);
-        
-        // Count existing chunks to avoid duplicate insertion
-        final existingChunks = await DatabaseService.instance.getChunks();
-        if (existingChunks.isEmpty) {
-          for (int i = 0; i < jsonChunks.length; i++) {
-            final chunkData = jsonChunks[i];
-            final chunk = ChunkModel(
-              id: _uuid.v4(),
-              documentId: chunkData['id']?.toString() ?? 'offline_doc',
-              documentName: (chunkData['metadata'] != null && chunkData['metadata']['source'] != null) 
-                  ? chunkData['metadata']['source'].toString() 
-                  : 'Offline Knowledge Base',
-              text: chunkData['text'] ?? '',
-              pageNumber: (chunkData['metadata'] != null && chunkData['metadata']['page'] != null) 
-                  ? int.tryParse(chunkData['metadata']['page'].toString()) ?? 1 
-                  : 1,
-            );
-            await DatabaseService.instance.insertChunks([chunk]);
-            
-            if (i % 10 == 0) {
-              _initProgress = (i / jsonChunks.length) * 0.8; 
-              notifyListeners();
-            }
-          }
-        }
-      }
 
       // Check Model presence
       final modelFile = File('${cacheDir.path}/llama3.2_1b_mobile.task');
