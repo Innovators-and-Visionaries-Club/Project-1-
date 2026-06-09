@@ -4,7 +4,7 @@ import 'core/theme.dart';
 import 'services/app_provider.dart';
 import 'features/home_screen.dart';
 import 'features/onboarding/welcome_screen.dart';
-import 'features/onboarding/onboarding_screen.dart';
+
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();

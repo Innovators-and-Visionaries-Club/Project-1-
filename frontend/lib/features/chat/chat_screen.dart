@@ -8,7 +8,7 @@ import '../../models/document_model.dart';
 import '../../core/theme.dart';
 import '../study/quiz_generator_screen.dart';
 import '../study/flashcards_screen.dart';
-import '../../widgets/typing_indicator.dart';
+
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
