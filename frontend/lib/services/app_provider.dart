@@ -5,6 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 import '../models/document_model.dart';
 import '../models/message_model.dart';
@@ -602,27 +604,62 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> clearChatHistory() async {
-    // Save the conversation to cache memory before wiping
+    // Save the conversation to a permanent PDF backup before wiping
     if (_messages.isNotEmpty) {
       try {
-        final cacheDir = await getTemporaryDirectory();
+        final pdf = pw.Document();
+        
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            build: (pw.Context context) {
+              return [
+                pw.Header(
+                  level: 0,
+                  child: pw.Text("Smriti Chat Backup", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.Paragraph(text: "Date: ${DateTime.now().toString().split('.')[0]}"),
+                pw.SizedBox(height: 20),
+                ..._messages.map((m) {
+                  final isUser = m.sender == 'user';
+                  return pw.Container(
+                    margin: const pw.EdgeInsets.only(bottom: 10),
+                    padding: const pw.EdgeInsets.all(10),
+                    decoration: pw.BoxDecoration(
+                      color: isUser ? PdfColors.blue100 : PdfColors.grey200,
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          isUser ? "You" : "Smriti AI",
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: isUser ? PdfColors.blue800 : PdfColors.grey800),
+                        ),
+                        pw.SizedBox(height: 5),
+                        pw.Text(m.text),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ];
+            },
+          ),
+        );
+
+        // Save to application documents directory so it survives cache clearing
+        final docsDir = await getApplicationDocumentsDirectory();
         final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-        final backupDir = Directory('${cacheDir.path}/saved_chats');
+        final backupDir = Directory('${docsDir.path}/saved_chats');
         if (!await backupDir.exists()) {
           await backupDir.create(recursive: true);
         }
-        final backupFile = File('${backupDir.path}/chat_$timestamp.json');
+        final backupFile = File('${backupDir.path}/chat_$timestamp.pdf');
         
-        final messagesList = _messages.map((m) => {
-          'sender': m.sender,
-          'text': m.text,
-          'timestamp': m.timestamp.toIso8601String()
-        }).toList();
-        
-        await backupFile.writeAsString(jsonEncode(messagesList));
-        debugPrint('Conversation saved to cache: ${backupFile.path}');
+        await backupFile.writeAsBytes(await pdf.save());
+        debugPrint('Conversation saved to permanent storage: ${backupFile.path}');
       } catch (e) {
-        debugPrint('Failed to save conversation: $e');
+        debugPrint('Failed to save conversation PDF: $e');
       }
     }
 
