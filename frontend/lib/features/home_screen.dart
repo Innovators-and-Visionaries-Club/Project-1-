@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'notebook/notebook_screen.dart';
 import 'chat/chat_screen.dart';
 import 'study/study_hub_screen.dart';
@@ -23,12 +24,60 @@ class _HomeScreenState extends State<HomeScreen> {
     SettingsScreen(),
   ];
 
+
+
+// ... (in _HomeScreenState)
+
+  Future<bool> _showExitDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.exit_to_app_rounded, color: Colors.black),
+            SizedBox(width: 10),
+            Text('Exit Smriti?'),
+          ],
+        ),
+        content: const Text(
+            'Are you sure you want to close the app?\n\n'
+            'Your current chat will automatically be saved as a PDF inside:\n\n'
+            'Android/data/.../Smriti_Chat_Backups/\n\n'
+            'The conversation will then be safely cleared from the screen.',
+            style: TextStyle(height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Continue Chat', style: TextStyle(color: Colors.black)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade50, foregroundColor: Colors.red),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirm Exit'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      body: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+          final shouldExit = await _showExitDialog();
+          if (shouldExit) {
+            SystemNavigator.pop();
+          }
+        },
+        child: IndexedStack(
+          index: _currentIndex,
+          children: _screens,
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
