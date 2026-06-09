@@ -603,65 +603,71 @@ class AppProvider extends ChangeNotifier {
     await _loadTimeline();
   }
 
-  Future<void> clearChatHistory() async {
-    // Save the conversation to a permanent PDF backup before wiping
-    if (_messages.isNotEmpty) {
-      try {
-        final pdf = pw.Document();
-        
-        pdf.addPage(
-          pw.MultiPage(
-            pageFormat: PdfPageFormat.a4,
-            build: (pw.Context context) {
-              return [
-                pw.Header(
-                  level: 0,
-                  child: pw.Text("Smriti Chat Backup", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
-                ),
-                pw.Paragraph(text: "Date: ${DateTime.now().toString().split('.')[0]}"),
-                pw.SizedBox(height: 20),
-                ..._messages.map((m) {
-                  final isUser = m.sender == 'user';
-                  return pw.Container(
-                    margin: const pw.EdgeInsets.only(bottom: 10),
-                    padding: const pw.EdgeInsets.all(10),
-                    decoration: pw.BoxDecoration(
-                      color: isUser ? PdfColors.blue100 : PdfColors.grey200,
-                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-                    ),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          isUser ? "You" : "Smriti AI",
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: isUser ? PdfColors.blue800 : PdfColors.grey800),
-                        ),
-                        pw.SizedBox(height: 5),
-                        pw.Text(m.text),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ];
-            },
-          ),
-        );
+  Future<void> exportChatToPdf() async {
+    if (_messages.isEmpty) return;
 
-        // Save to application documents directory so it survives cache clearing
-        final docsDir = await getApplicationDocumentsDirectory();
-        final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-        final backupDir = Directory('${docsDir.path}/saved_chats');
+    try {
+      final pdf = pw.Document();
+      
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return [
+              pw.Header(
+                level: 0,
+                child: pw.Text("Smriti Chat Backup", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+              ),
+              pw.Paragraph(text: "Date: ${DateTime.now().toString().split('.')[0]}"),
+              pw.SizedBox(height: 20),
+              ..._messages.map((m) {
+                final isUser = m.sender == 'user';
+                return pw.Container(
+                  margin: const pw.EdgeInsets.only(bottom: 10),
+                  padding: const pw.EdgeInsets.all(10),
+                  decoration: pw.BoxDecoration(
+                    color: isUser ? PdfColors.blue100 : PdfColors.grey200,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        isUser ? "You" : "Smriti AI",
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: isUser ? PdfColors.blue800 : PdfColors.grey800),
+                      ),
+                      pw.SizedBox(height: 5),
+                      pw.Text(m.text),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ];
+          },
+        ),
+      );
+
+      // Save to external storage so it is easily accessible to the user
+      final extDir = await getExternalStorageDirectory();
+      if (extDir != null) {
+        final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
+        final backupDir = Directory('${extDir.path}/Smriti_Chat_Backups');
         if (!await backupDir.exists()) {
           await backupDir.create(recursive: true);
         }
-        final backupFile = File('${backupDir.path}/chat_$timestamp.pdf');
+        final backupFile = File('${backupDir.path}/Smriti_Chat_$timestamp.pdf');
         
         await backupFile.writeAsBytes(await pdf.save());
-        debugPrint('Conversation saved to permanent storage: ${backupFile.path}');
-      } catch (e) {
-        debugPrint('Failed to save conversation PDF: $e');
+        debugPrint('Conversation auto-saved to public storage: ${backupFile.path}');
       }
+    } catch (e) {
+      debugPrint('Failed to save conversation PDF: $e');
     }
+  }
+
+  Future<void> clearChatHistory() async {
+    // Perform a final backup before wiping the screen
+    await exportChatToPdf();
 
     final db = await DatabaseService.instance.database;
     await db.delete('messages');
