@@ -240,7 +240,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'model loaded: llama 3.2 1b',
+              'model loaded: gemma 2b q4',
               style: TextStyle(
                 fontSize: 11,
                 color: Colors.white.withOpacity(0.6),

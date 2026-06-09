@@ -9,7 +9,6 @@ import '../../core/theme.dart';
 import '../study/quiz_generator_screen.dart';
 import '../study/flashcards_screen.dart';
 
-
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
 
