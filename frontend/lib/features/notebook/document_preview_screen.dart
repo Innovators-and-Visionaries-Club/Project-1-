@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../models/document_model.dart';
 import '../../models/chunk_model.dart';
 import '../../services/database_service.dart';

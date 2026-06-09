@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../services/app_provider.dart';
@@ -33,7 +33,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
       _provider.consumeIngestedFileName();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Γ£ô $name ingested ΓÇö ready to query'),
+          content: Text('✓ $name ingested — ready to query'),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 3),
         ),
@@ -228,7 +228,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'offline ┬╖ private',
+                  'offline · private',
                   style: TextStyle(
                     fontSize: 10,
                     color: Colors.white.withOpacity(0.6),
@@ -453,7 +453,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                               style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
                             ),
                             const SizedBox(width: 6),
-                            const Text('ΓÇó', style: TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
+                            const Text('•', style: TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
                             const SizedBox(width: 6),
                             Text(
                               doc.status == 'Ready'
@@ -480,7 +480,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 ],
               ),
 
-              // Inline progress bar ΓÇö only shown while ingesting this doc
+              // Inline progress bar — only shown while ingesting this doc
               if (isIngesting && provider.isIngesting) ...[
                 const SizedBox(height: 10),
                 ClipRRect(
@@ -499,7 +499,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 const SizedBox(height: 5),
                 Text(
                   isErrorState
-                      ? 'Failed ΓÇö tap to retry'
+                      ? 'Failed — tap to retry'
                       : provider.ingestionProgressText,
                   style: TextStyle(
                     fontSize: 10,
