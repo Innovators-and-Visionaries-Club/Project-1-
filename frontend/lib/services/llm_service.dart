@@ -41,12 +41,12 @@ class LlmService {
   Future<void> _loadEngineIfNeeded() async {
     if (_isEngineLoaded) return;
 
-    final cacheDir = await getTemporaryDirectory();
-    final modelPath = '${cacheDir.path}/llama3.2_1b_mobile.task';
+    final docsDir = await getApplicationDocumentsDirectory();
+    final modelPath = '${docsDir.path}/llama3.2_1b_mobile.task';
     final modelFile = File(modelPath);
 
     if (!await modelFile.exists()) {
-      throw Exception("⚠️ LLM model not found in cache. Please copy 'llama3.2_1b_mobile.task' to the app's cache directory.");
+      throw Exception("⚠️ LLM model not found. Please copy 'llama3.2_1b_mobile.task' to the app's documents directory.");
     }
 
     // This is where the heavy 1.5GB load happens in MediaPipe:

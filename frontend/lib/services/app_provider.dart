@@ -124,10 +124,10 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final cacheDir = await getTemporaryDirectory();
+      final docsDir = await getApplicationDocumentsDirectory();
 
-      // Check Model presence
-      final modelFile = File('${cacheDir.path}/llama3.2_1b_mobile.task');
+      // Check Model presence in secure permanent storage
+      final modelFile = File('${docsDir.path}/llama3.2_1b_mobile.task');
       if (await modelFile.exists()) {
          _initProgress = 1.0;
       } else {
