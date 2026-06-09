@@ -442,7 +442,6 @@ class _ChatScreenState extends State<ChatScreen> {
         spacing: 6,
         runSpacing: 6,
         children: citations.asMap().entries.map((entry) {
-          final idx = entry.key + 1;
           final citation = entry.value;
 
           return InkWell(
