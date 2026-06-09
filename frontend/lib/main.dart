@@ -16,8 +16,34 @@ void main() {
   );
 }
 
-class SmritiApp extends StatelessWidget {
+class SmritiApp extends StatefulWidget {
   const SmritiApp({super.key});
+
+  @override
+  State<SmritiApp> createState() => _SmritiAppState();
+}
+
+class _SmritiAppState extends State<SmritiApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      // Trigger PDF auto-save when app is sent to background or closed
+      final provider = Provider.of<AppProvider>(context, listen: false);
+      provider.exportChatToPdf();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
